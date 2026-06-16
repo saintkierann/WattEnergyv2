@@ -3,7 +3,7 @@ import { BONE, MP_D, MC_D, MF_D } from "./lib/canvas";
 import { drawCard } from "./renderers/card";
 import { drawSticker } from "./renderers/sticker";
 import { drawDayCard } from "./renderers/day";
-import { CARD_STYLES, DAY_CARD_STYLES, STICKER_STYLES, STICKER_INKS } from "./renderers/styles";
+import { CARD_STYLES, DAY_CARD_STYLES, STICKER_STYLES } from "./renderers/styles";
 import { analyzeMeal } from "./lib/api";
 import { idbGet, idbSet } from "./lib/store";
 import type { MealData, LoggedMeal, Totals } from "./types";
@@ -43,7 +43,7 @@ export default function App() {
   const [pop, setPop] = useState(false);
   const [tab, setTab] = useState("cards");
   const [cardStyle, setCardStyle] = useState("spotlight");
-  const [stickerStyle, setStickerStyle] = useState("inline");
+  const [stickerStyle, setStickerStyle] = useState("blueMeal");
   const [stickerInk, setStickerInk] = useState(BONE);
   const [monoMacros, setMonoMacros] = useState(false);
   const [macroColors, setMacroColors] = useState({ p: MP_D, c: MC_D, f: MF_D });
@@ -410,9 +410,12 @@ export default function App() {
         <div className="fl-head">
           <div className="fl-brand">
             <div className="fl-logo">
-              Watt <b>Energy</b>
+              Watt
+              <svg className="fl-bolt" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
+              </svg>
             </div>
-            <div className="fl-tag">the whole picture · shared</div>
+            <div className="fl-tag">scan · fuel · share</div>
           </div>
           {log.length > 0 && screen !== "share" && (
             <div className="fl-today">
@@ -733,42 +736,6 @@ export default function App() {
                   </div>
                 ))}
                 <p className="fl-tip">Energy in = today's logged meals. Energy out = what you enter here.</p>
-              </div>
-            )}
-            {tab === "stickers" && !dayMode && (
-              <div className="fl-colors">
-                <div className="fl-colors-h">Colour</div>
-                <div className="fl-swatches">
-                  {STICKER_INKS.map((c) => (
-                    <button key={c} className={"fl-sw" + (stickerInk === c ? " active" : "")} style={{ background: c }} onClick={() => setStickerInk(c)} aria-label={"colour " + c} />
-                  ))}
-                  <label className="fl-sw custom">
-                    <input type="color" value={stickerInk} onChange={(e) => setStickerInk(e.target.value)} />
-                  </label>
-                </div>
-                <div className="fl-color-mode">
-                  <button className={"fl-mode" + (monoMacros ? " active" : "")} onClick={() => setMonoMacros(true)}>
-                    All one colour
-                  </button>
-                  <button className={"fl-mode" + (!monoMacros ? " active" : "")} onClick={() => setMonoMacros(false)}>
-                    Macro colours
-                  </button>
-                </div>
-                {!monoMacros && (
-                  <div className="fl-macro-pick">
-                    {[
-                      ["p", "Protein"],
-                      ["c", "Carbs"],
-                      ["f", "Fat"],
-                    ].map(([k, lbl]) => (
-                      <label key={k} className="fl-mp">
-                        <span style={{ background: (macroColors as any)[k] }} />
-                        {lbl}
-                        <input type="color" value={(macroColors as any)[k]} onChange={(e) => setMacroColors((m) => ({ ...m, [k]: e.target.value }))} />
-                      </label>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
             <div className="fl-handle-row">
