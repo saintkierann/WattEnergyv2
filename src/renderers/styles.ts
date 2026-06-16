@@ -13,15 +13,29 @@ export const DAY_CARD_STYLES = [
   { id: "splits", name: "Splits" },
 ];
 
+// 20 authentic iMessage-style stickers (blue/green bubbles, lock-screen
+// notifications, threads, tapbacks). `tag` groups them in the picker.
 export const STICKER_STYLES = [
-  { id: "inline", name: "Inline" },
-  { id: "stack", name: "Stack" },
-  { id: "rings", name: "Rings" },
-  { id: "chips", name: "Glass chips" },
-  { id: "editorial", name: "Editorial" },
-  { id: "texts", name: "Dish text" },
-  { id: "textmac", name: "Macro text" },
-  { id: "splits", name: "Splits" },
+  { id: "blueMeal", name: "Meal", tag: "Blue" },
+  { id: "blueFull", name: "Full breakdown", tag: "Blue" },
+  { id: "blueMacros", name: "Macros", tag: "Blue" },
+  { id: "blueKcal", name: "Calories", tag: "Blue" },
+  { id: "blueProtein", name: "Protein", tag: "Blue" },
+  { id: "blueStreak", name: "Daily", tag: "Blue" },
+  { id: "doubleBlue", name: "Double bubble", tag: "Blue" },
+  { id: "greenMeal", name: "Meal", tag: "Green" },
+  { id: "greenMacros", name: "Macros", tag: "Green" },
+  { id: "lockMeal", name: "Meal", tag: "Notification" },
+  { id: "lockMacros", name: "Macros", tag: "Notification" },
+  { id: "lockProtein", name: "Protein", tag: "Notification" },
+  { id: "banner", name: "Banner", tag: "Notification" },
+  { id: "stack", name: "Stack", tag: "Notification" },
+  { id: "thread", name: "Meal reply", tag: "Thread" },
+  { id: "threadMacros", name: "Macro reply", tag: "Thread" },
+  { id: "contact", name: "Contact card", tag: "Thread" },
+  { id: "tapback", name: "Tapback", tag: "Reaction" },
+  { id: "delivered", name: "Delivered", tag: "Reaction" },
+  { id: "typing", name: "Typing", tag: "Reaction" },
 ];
 
 // curated, photo-legible ink palette for stickers (custom picker covers the rest)
