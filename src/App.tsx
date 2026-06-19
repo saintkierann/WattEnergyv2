@@ -94,9 +94,10 @@ export default function App() {
     { kcal: 0, p: 0, c: 0, f: 0 }
   );
   const energyOutNum = +energyOut || 0;
-  // Energy out for the viewed day: today uses the manual field; past days use the
-  // stored daily_energy total (populated by the Strava backfill in Increment B).
-  const selectedOut = selectedDate === todayStr ? energyOutNum : energyByDay[selectedDate] || 0;
+  // Energy out for the viewed day: the synced daily_energy total (base BMR×1.2 +
+  // Strava activity). Today allows a manual override if you've typed one.
+  const synced = energyByDay[selectedDate];
+  const selectedOut = selectedDate === todayStr ? (energyOutNum > 0 ? energyOutNum : synced ?? 0) : synced ?? 0;
   const actNum = { kcal: selectedOut, steps: +act.steps || 0, run: +act.run || 0, bike: +act.bike || 0, swim: +act.swim || 0 };
 
   async function refetchMeals() {
@@ -140,11 +141,22 @@ export default function App() {
     else setFontsReady(true);
   }, []);
 
-  // Check Strava connection (no-op in local dev where the route 404s).
+  // Check Strava connection; if connected, sync the last 7 days of energy-out.
   useEffect(() => {
     fetch("/api/strava/status")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setStrava(d))
+      .then(async (d) => {
+        if (!d) return;
+        setStrava(d);
+        if (d.connected) {
+          try {
+            await fetch("/api/strava/sync", { method: "POST" });
+          } catch {
+            /* ignore */
+          }
+          refetchMeals();
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -544,6 +556,9 @@ export default function App() {
               </button>
               {calOpen && (
                 <div className="fl-cal">
+                  <div className="fl-cal-month">
+                    {[...new Set([...windowDates].reverse().map((d) => new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "long" })))].join(" – ")}
+                  </div>
                   {[...windowDates].reverse().map((d) => {
                     const dt = new Date(d + "T00:00:00");
                     return (
