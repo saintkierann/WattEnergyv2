@@ -52,9 +52,11 @@ export default function App() {
   const [manual, setManual] = useState({ title: "", kcal: "", p: "", c: "", f: "" });
   const [act, setAct] = useState({ kcal: "", steps: "", run: "", bike: "", swim: "" });
   const [actOn, setActOn] = useState({ steps: true, run: true, bike: true, swim: true });
-  // Daily energy out (calories burned). Manual for the MVP, persisted per-day;
-  // a wearable source (Garmin via aggregator) will populate this later.
+  // Daily energy out (calories burned). Manual fallback, persisted per-day;
+  // Strava (+ BMR baseline) will populate this once connected.
   const [energyOut, setEnergyOut] = useState("");
+  // Strava connection status (from /api/strava/status on Vercel).
+  const [strava, setStrava] = useState<{ connected: boolean; athleteName?: string | null; needsProfile?: boolean } | null>(null);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [adj, setAdj] = useState({ p: "", c: "", f: "" });
   const [showAdj, setShowAdj] = useState(false);
@@ -113,6 +115,14 @@ export default function App() {
   useEffect(() => {
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => setFontsReady(true));
     else setFontsReady(true);
+  }, []);
+
+  // Check Strava connection (no-op in local dev where the route 404s).
+  useEffect(() => {
+    fetch("/api/strava/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setStrava(d))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -495,13 +505,22 @@ export default function App() {
               or enter macros manually
             </button>
             <div className="fl-eout">
+              {strava?.connected ? (
+                <div className="fl-strava-on">⚡ Strava connected{strava.athleteName ? ` — ${strava.athleteName}` : ""}</div>
+              ) : (
+                <button className="fl-strava-btn" onClick={() => (window.location.href = "/api/strava/connect")}>
+                  Connect Strava
+                </button>
+              )}
               <label className="fl-eout-field">
                 <span>
                   Energy out today<i>calories burned</i>
                 </span>
                 <input inputMode="numeric" value={energyOut} onChange={(e) => setEnergyOut(e.target.value)} placeholder="640" />
               </label>
-              <p className="fl-eout-note">Manual for now — syncs from your watch (Garmin) soon.</p>
+              <p className="fl-eout-note">
+                {strava?.connected ? "Connected — activity will auto-fill once setup completes. Manual override above." : "Manual for now — connect Strava to auto-fill from your activities."}
+              </p>
             </div>
             {log.length > 0 && (
               <div className="fl-log">
