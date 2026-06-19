@@ -454,6 +454,7 @@ export default function App() {
               <svg className="fl-bolt" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M13 2 4 14h6l-1 8 9-12h-6z" />
               </svg>
+              Energy
             </div>
             <div className="fl-tag">scan · fuel · share</div>
           </div>
