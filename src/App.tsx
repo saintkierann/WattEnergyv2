@@ -39,7 +39,12 @@ export default function App() {
   const [data, setData] = useState<MealData | null>(null);
   const [sel, setSel] = useState<Record<number, number>>({});
   const [error, setError] = useState<string | null>(null);
-  const [log, setLog] = useState<LoggedMeal[]>([]);
+  // Meals now live in Supabase, dated, on a rolling 7-day window. `log` is the
+  // selected day's meals, derived from `allMeals` below.
+  const [allMeals, setAllMeals] = useState<(LoggedMeal & { id: string; date: string })[]>([]);
+  const [energyByDay, setEnergyByDay] = useState<Record<string, number>>({});
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString("en-CA"));
+  const [calOpen, setCalOpen] = useState(false);
   const [pop, setPop] = useState(false);
   const [tab, setTab] = useState("cards");
   const [cardStyle, setCardStyle] = useState("spotlight");
@@ -77,21 +82,42 @@ export default function App() {
 
   const adjNum = { p: +adj.p || 0, c: +adj.c || 0, f: +adj.f || 0 };
   const totals = computeTotals(data, sel, adjNum);
+  const todayStr = new Date().toLocaleDateString("en-CA");
+  const windowDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return d.toLocaleDateString("en-CA");
+  });
+  const log = allMeals.filter((m) => m.date === selectedDate);
   const dayTotals = log.reduce(
     (a, m) => ({ kcal: a.kcal + (m.kcal || 0), p: a.p + (m.p || 0), c: a.c + (m.c || 0), f: a.f + (m.f || 0) }),
     { kcal: 0, p: 0, c: 0, f: 0 }
   );
   const energyOutNum = +energyOut || 0;
-  const actNum = { kcal: energyOutNum, steps: +act.steps || 0, run: +act.run || 0, bike: +act.bike || 0, swim: +act.swim || 0 };
+  // Energy out for the viewed day: today uses the manual field; past days use the
+  // stored daily_energy total (populated by the Strava backfill in Increment B).
+  const selectedOut = selectedDate === todayStr ? energyOutNum : energyByDay[selectedDate] || 0;
+  const actNum = { kcal: selectedOut, steps: +act.steps || 0, run: +act.run || 0, bike: +act.bike || 0, swim: +act.swim || 0 };
+
+  async function refetchMeals() {
+    try {
+      const r = await fetch("/api/meals");
+      if (!r.ok) return;
+      const d = await r.json();
+      setAllMeals(Array.isArray(d.meals) ? d.meals : []);
+      setEnergyByDay(Object.fromEntries((d.energy || []).map((e: any) => [e.date, e.total_kcal])));
+    } catch {
+      /* offline / not configured — leave meals empty */
+    }
+  }
 
   // ---- on-device persistence: load once, then save on change ----
   useEffect(() => {
     (async () => {
-      const savedLog = await idbGet<LoggedMeal[]>("log");
       const savedHandle = await idbGet<string>("handle");
       const savedShow = await idbGet<boolean>("showHandle");
       const savedEO = await idbGet<{ date: string; kcal: number }>("energyOut");
-      if (Array.isArray(savedLog)) setLog(savedLog);
+      refetchMeals(); // meals now come from Supabase (dated, 7-day window)
       if (typeof savedHandle === "string") setHandle(savedHandle);
       if (typeof savedShow === "boolean") setShowHandle(savedShow);
       // Only restore energy-out if it's from today (it's a per-day figure).
@@ -99,9 +125,6 @@ export default function App() {
       setLoaded(true);
     })();
   }, []);
-  useEffect(() => {
-    if (loaded) idbSet("log", log);
-  }, [log, loaded]);
   useEffect(() => {
     if (loaded) idbSet("handle", handle);
   }, [handle, loaded]);
@@ -278,8 +301,18 @@ export default function App() {
   function choose(qi: number, oi: number) {
     setSel((prev) => ({ ...prev, [qi]: oi }));
   }
-  function addToToday() {
-    setLog((prev) => [...prev, { name: data!.title, ...totals, img: preview }]);
+  async function addToToday() {
+    // logs to the day currently being viewed (today, or a backdated day)
+    try {
+      await fetch("/api/meals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: selectedDate, name: data!.title, kcal: totals.kcal, p: totals.p, c: totals.c, f: totals.f, photoDataUrl: preview }),
+      });
+      await refetchMeals();
+    } catch {
+      /* ignore — meal still cleared below */
+    }
     reset();
   }
   function reset() {
@@ -310,8 +343,15 @@ export default function App() {
     setTab("cards");
     setScreen("share");
   }
-  function deleteLog(i: number) {
-    setLog((prev) => prev.filter((_, j) => j !== i));
+  async function deleteLog(i: number) {
+    const m = log[i];
+    if (!m?.id) return;
+    try {
+      await fetch("/api/meals?id=" + encodeURIComponent(m.id), { method: "DELETE" });
+      await refetchMeals();
+    } catch {
+      /* ignore */
+    }
   }
   function editLog(i: number) {
     const m = log[i];
@@ -329,7 +369,16 @@ export default function App() {
   function submitManual() {
     if (editIdx != null) {
       const t = { kcal: +manual.kcal || 0, p: +manual.p || 0, c: +manual.c || 0, f: +manual.f || 0 };
-      setLog((prev) => prev.map((m, j) => (j === editIdx ? { ...m, name: manual.title || "My meal", ...t } : m)));
+      const target = log[editIdx];
+      if (target?.id) {
+        fetch("/api/meals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: target.id, name: manual.title || "My meal", ...t }),
+        })
+          .then(() => refetchMeals())
+          .catch(() => {});
+      }
       setEditIdx(null);
       setManual({ title: "", kcal: "", p: "", c: "", f: "" });
       setScreen("capture");
@@ -433,9 +482,11 @@ export default function App() {
   }
 
   const dayTotal = log.reduce((a, m) => a + m.kcal, 0);
-  const ioNet = dayTotal - energyOutNum;
+  const ioNet = dayTotal - selectedOut;
   const ioNetStr = (ioNet > 0 ? "+" : ioNet < 0 ? "−" : "") + Math.abs(ioNet).toLocaleString();
   const ioNetLabel = ioNet > 0 ? "surplus" : ioNet < 0 ? "deficit" : "even";
+  const dayLabel = (d: string) =>
+    d === todayStr ? "Today" : new Date(d + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
   const dayMode = shareMode === "day";
   const styles = dayMode ? DAY_CARD_STYLES : tab === "cards" ? CARD_STYLES : STICKER_STYLES;
   const activeStyle = dayMode ? dayStyle : tab === "cards" ? cardStyle : stickerStyle;
@@ -467,7 +518,7 @@ export default function App() {
                 </div>
                 <div className="fl-io-sep" />
                 <div className="fl-io-stat out">
-                  <div className="n">{energyOutNum.toLocaleString()}</div>
+                  <div className="n">{selectedOut.toLocaleString()}</div>
                   <div className="l">out</div>
                 </div>
               </div>
@@ -480,6 +531,32 @@ export default function App() {
 
         {screen === "capture" && (
           <div className="fl-hero">
+            <div className="fl-daynav">
+              <button className="fl-daybtn" onClick={() => setCalOpen((v) => !v)} aria-expanded={calOpen} aria-label="Choose day">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <rect x="3" y="4.5" width="18" height="16" rx="2.5" />
+                  <path d="M3 9h18M8 2.5v4M16 2.5v4" />
+                </svg>
+                <span>{dayLabel(selectedDate)}</span>
+                <svg className={"fl-caret" + (calOpen ? " open" : "")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              {calOpen && (
+                <div className="fl-cal">
+                  {[...windowDates].reverse().map((d) => {
+                    const dt = new Date(d + "T00:00:00");
+                    return (
+                      <button key={d} className={"fl-cal-day" + (d === selectedDate ? " sel" : "")} onClick={() => { setSelectedDate(d); setCalOpen(false); }}>
+                        <span className="dow">{dt.toLocaleDateString(undefined, { weekday: "short" })}</span>
+                        <span className="num">{dt.getDate()}</span>
+                        {d === todayStr && <span className="td" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <h1>
               Share your whole <em>performance</em>.
             </h1>
@@ -505,28 +582,30 @@ export default function App() {
             <button className="fl-manual-link" onClick={startManual}>
               or enter macros manually
             </button>
-            <div className="fl-eout">
-              {strava?.connected ? (
-                <div className="fl-strava-on">⚡ Strava connected{strava.athleteName ? ` — ${strava.athleteName}` : ""}</div>
-              ) : (
-                <button className="fl-strava-btn" onClick={() => (window.location.href = "/api/strava/connect")}>
-                  Connect Strava
-                </button>
-              )}
-              <label className="fl-eout-field">
-                <span>
-                  Energy out today<i>calories burned</i>
-                </span>
-                <input inputMode="numeric" value={energyOut} onChange={(e) => setEnergyOut(e.target.value)} placeholder="640" />
-              </label>
-              <p className="fl-eout-note">
-                {strava?.connected ? "Connected — activity will auto-fill once setup completes. Manual override above." : "Manual for now — connect Strava to auto-fill from your activities."}
-              </p>
-            </div>
+            {selectedDate === todayStr && (
+              <div className="fl-eout">
+                {strava?.connected ? (
+                  <div className="fl-strava-on">⚡ Strava connected{strava.athleteName ? ` — ${strava.athleteName}` : ""}</div>
+                ) : (
+                  <button className="fl-strava-btn" onClick={() => (window.location.href = "/api/strava/connect")}>
+                    Connect Strava
+                  </button>
+                )}
+                <label className="fl-eout-field">
+                  <span>
+                    Energy out today<i>calories burned</i>
+                  </span>
+                  <input inputMode="numeric" value={energyOut} onChange={(e) => setEnergyOut(e.target.value)} placeholder="640" />
+                </label>
+                <p className="fl-eout-note">
+                  {strava?.connected ? "Connected — activity will auto-fill once setup completes. Manual override above." : "Manual for now — connect Strava to auto-fill from your activities."}
+                </p>
+              </div>
+            )}
             {log.length > 0 && (
               <div className="fl-log">
                 <div className="fl-log-h">
-                  Logged today <span className="fl-log-hint">tap to share</span>
+                  {selectedDate === todayStr ? "Logged today" : `Logged ${dayLabel(selectedDate)}`} <span className="fl-log-hint">tap to share</span>
                 </div>
                 {log.map((m, i) => (
                   <div className="fl-log-row" key={i}>

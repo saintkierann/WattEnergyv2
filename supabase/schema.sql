@@ -33,8 +33,25 @@ create table if not exists daily_energy (
   primary key (user_id, date)
 );
 
+-- Per-day meals (energy in) with photos, rolling 7-day window (older auto-purged).
+create table if not exists meals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null,
+  date date not null,
+  name text,
+  kcal int default 0,
+  p int default 0,
+  c int default 0,
+  f int default 0,
+  photo_path text,            -- path in the 'meal-photos' storage bucket (nullable)
+  created_at timestamptz default now()
+);
+create index if not exists meals_user_date on meals (user_id, date);
+
 -- RLS on: the public (publishable) key can't read/write these. The server uses
 -- the secret key, which bypasses RLS. Add policies later when adding real auth.
 alter table profile enable row level security;
 alter table strava_account enable row level security;
 alter table daily_energy enable row level security;
+alter table meals enable row level security;
+-- Also create a PRIVATE Storage bucket named 'meal-photos' (Storage → New bucket).
