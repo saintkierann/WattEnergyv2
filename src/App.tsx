@@ -52,6 +52,11 @@ export default function App() {
   const [manual, setManual] = useState({ title: "", kcal: "", p: "", c: "", f: "" });
   const [act, setAct] = useState({ kcal: "", steps: "", run: "", bike: "", swim: "" });
   const [actOn, setActOn] = useState({ steps: true, run: true, bike: true, swim: true });
+  // Daily energy out (calories burned). Manual fallback, persisted per-day;
+  // Strava (+ BMR baseline) will populate this once connected.
+  const [energyOut, setEnergyOut] = useState("");
+  // Strava connection status (from /api/strava/status on Vercel).
+  const [strava, setStrava] = useState<{ connected: boolean; athleteName?: string | null; needsProfile?: boolean } | null>(null);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [adj, setAdj] = useState({ p: "", c: "", f: "" });
   const [showAdj, setShowAdj] = useState(false);
@@ -76,7 +81,8 @@ export default function App() {
     (a, m) => ({ kcal: a.kcal + (m.kcal || 0), p: a.p + (m.p || 0), c: a.c + (m.c || 0), f: a.f + (m.f || 0) }),
     { kcal: 0, p: 0, c: 0, f: 0 }
   );
-  const actNum = { kcal: +act.kcal || 0, steps: +act.steps || 0, run: +act.run || 0, bike: +act.bike || 0, swim: +act.swim || 0 };
+  const energyOutNum = +energyOut || 0;
+  const actNum = { kcal: energyOutNum, steps: +act.steps || 0, run: +act.run || 0, bike: +act.bike || 0, swim: +act.swim || 0 };
 
   // ---- on-device persistence: load once, then save on change ----
   useEffect(() => {
@@ -84,9 +90,12 @@ export default function App() {
       const savedLog = await idbGet<LoggedMeal[]>("log");
       const savedHandle = await idbGet<string>("handle");
       const savedShow = await idbGet<boolean>("showHandle");
+      const savedEO = await idbGet<{ date: string; kcal: number }>("energyOut");
       if (Array.isArray(savedLog)) setLog(savedLog);
       if (typeof savedHandle === "string") setHandle(savedHandle);
       if (typeof savedShow === "boolean") setShowHandle(savedShow);
+      // Only restore energy-out if it's from today (it's a per-day figure).
+      if (savedEO && savedEO.date === new Date().toISOString().slice(0, 10) && savedEO.kcal > 0) setEnergyOut(String(savedEO.kcal));
       setLoaded(true);
     })();
   }, []);
@@ -99,10 +108,21 @@ export default function App() {
   useEffect(() => {
     if (loaded) idbSet("showHandle", showHandle);
   }, [showHandle, loaded]);
+  useEffect(() => {
+    if (loaded) idbSet("energyOut", { date: new Date().toISOString().slice(0, 10), kcal: energyOutNum });
+  }, [energyOutNum, loaded]);
 
   useEffect(() => {
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => setFontsReady(true));
     else setFontsReady(true);
+  }, []);
+
+  // Check Strava connection (no-op in local dev where the route 404s).
+  useEffect(() => {
+    fetch("/api/strava/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setStrava(d))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -143,7 +163,7 @@ export default function App() {
       if (dayStyle === "energy") {
         drawCard(ctx, "energy", { totals: dayTotals, caloriesIn: dayTotals.kcal, act: actNum, actOn, handle, showHandle });
       } else {
-        drawDayCard(ctx, dayStyle, { totals: dayTotals, meals: log, imgs: dayImgsRef.current, handle, showHandle });
+        drawDayCard(ctx, dayStyle, { totals: dayTotals, meals: log, imgs: dayImgsRef.current, handle, showHandle, caloriesIn: dayTotals.kcal, act: actNum, actOn });
       }
       return;
     }
@@ -159,7 +179,7 @@ export default function App() {
       drawSticker(ctx, stickerStyle, p);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, shareMode, dayStyle, dayImgsReady, tab, cardStyle, stickerStyle, stickerInk, monoMacros, macroColors, handle, showHandle, fontsReady, imgReady, totals.kcal, totals.p, totals.c, totals.f, dayTotals.kcal, data, act.kcal, act.steps, act.run, act.bike, act.swim, actOn, reshare]);
+  }, [screen, shareMode, dayStyle, dayImgsReady, tab, cardStyle, stickerStyle, stickerInk, monoMacros, macroColors, handle, showHandle, fontsReady, imgReady, totals.kcal, totals.p, totals.c, totals.f, dayTotals.kcal, data, energyOut, act.steps, act.run, act.bike, act.swim, actOn, reshare]);
 
   // load logged-meal photos into Image elements for the day-summary card
   useEffect(() => {
@@ -347,18 +367,35 @@ export default function App() {
   }
   async function copyImg() {
     if (!canvasRef.current) return;
+    const blob = cvBlob();
+    // 1) Clipboard image — desktop + modern iOS Safari, but ONLY in a secure
+    //    context (HTTPS or localhost). Over plain http it's unavailable.
     try {
-      if (!navigator.clipboard || !(window as any).ClipboardItem) throw new Error("no-clipboard");
-      await navigator.clipboard.write([new (window as any).ClipboardItem({ "image/png": Promise.resolve(cvBlob()) })]);
-      setCopied("ok");
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      try {
-        download(cvBlob());
-        setCopied("saved");
+      if (navigator.clipboard && (window as any).ClipboardItem && window.isSecureContext) {
+        await navigator.clipboard.write([new (window as any).ClipboardItem({ "image/png": Promise.resolve(blob) })]);
+        setCopied("ok");
         setTimeout(() => setCopied(false), 1800);
-      } catch {}
+        return;
+      }
+    } catch {
+      /* fall through */
     }
+    // 2) Native share sheet — best on iPhone: drop straight into Messages / Stories.
+    try {
+      const file = new File([blob], "watt-energy.png", { type: "image/png" });
+      if ((navigator as any).canShare && (navigator as any).canShare({ files: [file] })) {
+        await (navigator as any).share({ files: [file] });
+        return;
+      }
+    } catch {
+      /* fall through */
+    }
+    // 3) Last resort — download the PNG.
+    try {
+      download(blob);
+      setCopied("saved");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
   }
   async function shareImg() {
     if (!canvasRef.current) return;
@@ -396,6 +433,9 @@ export default function App() {
   }
 
   const dayTotal = log.reduce((a, m) => a + m.kcal, 0);
+  const ioNet = dayTotal - energyOutNum;
+  const ioNetStr = (ioNet > 0 ? "+" : ioNet < 0 ? "−" : "") + Math.abs(ioNet).toLocaleString();
+  const ioNetLabel = ioNet > 0 ? "surplus" : ioNet < 0 ? "deficit" : "even";
   const dayMode = shareMode === "day";
   const styles = dayMode ? DAY_CARD_STYLES : tab === "cards" ? CARD_STYLES : STICKER_STYLES;
   const activeStyle = dayMode ? dayStyle : tab === "cards" ? cardStyle : stickerStyle;
@@ -417,10 +457,22 @@ export default function App() {
             </div>
             <div className="fl-tag">scan · fuel · share</div>
           </div>
-          {log.length > 0 && screen !== "share" && (
-            <div className="fl-today">
-              <div className="n">{dayTotal.toLocaleString()}</div>
-              <div className="l">kcal today</div>
+          {(log.length > 0 || energyOutNum > 0) && screen !== "share" && (
+            <div className="fl-io">
+              <div className="fl-io-row">
+                <div className="fl-io-stat">
+                  <div className="n">{dayTotal.toLocaleString()}</div>
+                  <div className="l">in</div>
+                </div>
+                <div className="fl-io-sep" />
+                <div className="fl-io-stat out">
+                  <div className="n">{energyOutNum.toLocaleString()}</div>
+                  <div className="l">out</div>
+                </div>
+              </div>
+              <div className={"fl-io-net " + (ioNet > 0 ? "sur" : ioNet < 0 ? "def" : "")}>
+                {ioNetStr} {ioNetLabel}
+              </div>
             </div>
           )}
         </div>
@@ -452,6 +504,24 @@ export default function App() {
             <button className="fl-manual-link" onClick={startManual}>
               or enter macros manually
             </button>
+            <div className="fl-eout">
+              {strava?.connected ? (
+                <div className="fl-strava-on">⚡ Strava connected{strava.athleteName ? ` — ${strava.athleteName}` : ""}</div>
+              ) : (
+                <button className="fl-strava-btn" onClick={() => (window.location.href = "/api/strava/connect")}>
+                  Connect Strava
+                </button>
+              )}
+              <label className="fl-eout-field">
+                <span>
+                  Energy out today<i>calories burned</i>
+                </span>
+                <input inputMode="numeric" value={energyOut} onChange={(e) => setEnergyOut(e.target.value)} placeholder="640" />
+              </label>
+              <p className="fl-eout-note">
+                {strava?.connected ? "Connected — activity will auto-fill once setup completes. Manual override above." : "Manual for now — connect Strava to auto-fill from your activities."}
+              </p>
+            </div>
             {log.length > 0 && (
               <div className="fl-log">
                 <div className="fl-log-h">
@@ -716,7 +786,7 @@ export default function App() {
                   <span>
                     Calories burned<i>energy out</i>
                   </span>
-                  <input inputMode="numeric" value={act.kcal} onChange={(e) => setAct((a) => ({ ...a, kcal: e.target.value }))} placeholder="640" />
+                  <input inputMode="numeric" value={energyOut} onChange={(e) => setEnergyOut(e.target.value)} placeholder="640" />
                 </label>
                 {[
                   { key: "steps", label: "Steps", unit: "", ph: "12,500" },

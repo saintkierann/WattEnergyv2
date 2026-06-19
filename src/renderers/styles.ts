@@ -36,6 +36,13 @@ export const STICKER_STYLES = [
   { id: "tapback", name: "Tapback", tag: "Reaction" },
   { id: "delivered", name: "Delivered", tag: "Reaction" },
   { id: "typing", name: "Typing", tag: "Reaction" },
+  // Energy in vs out — the showcase metric. iMessage-styled, like the rest.
+  { id: "ioBlue", name: "In · Out", tag: "Energy" },
+  { id: "ioNet", name: "Net energy", tag: "Energy" },
+  { id: "ioThread", name: "Balance reply", tag: "Energy" },
+  { id: "ioDouble", name: "Fuel & burn", tag: "Energy" },
+  { id: "ioGreen", name: "In · Out (green)", tag: "Energy" },
+  { id: "ioLock", name: "Balance alert", tag: "Energy" },
 ];
 
 // curated, photo-legible ink palette for stickers (custom picker covers the rest)

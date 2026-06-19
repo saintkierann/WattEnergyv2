@@ -42,4 +42,6 @@ function devApi(): Plugin {
 
 export default defineConfig({
   plugins: [react(), devApi()],
+  // dev only: allow Cloudflare/ngrok tunnel hosts so the app can be tested over HTTPS on a phone
+  server: { allowedHosts: true },
 });

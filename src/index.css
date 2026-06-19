@@ -44,6 +44,26 @@ body{background:#F3EFE5;font-family:'Archivo',sans-serif;}
 .fl-today{display:flex;flex-direction:column;align-items:flex-end;line-height:1;padding-left:14px;}
 .fl-today .n{font-weight:900;font-size:22px;letter-spacing:-.5px;color:var(--ink);}
 .fl-today .l{font-size:9px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);font-weight:800;margin-top:4px;}
+.fl-io{display:flex;flex-direction:column;align-items:flex-end;gap:5px;padding-left:14px;}
+.fl-io-row{display:flex;align-items:center;gap:12px;}
+.fl-io-stat{display:flex;flex-direction:column;align-items:center;line-height:1;}
+.fl-io-stat .n{font-weight:900;font-size:20px;letter-spacing:-.5px;color:var(--ink);}
+.fl-io-stat.out .n{color:var(--ink-soft);}
+.fl-io-stat .l{font-size:8.5px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);font-weight:800;margin-top:3px;}
+.fl-io-sep{width:1px;height:24px;background:var(--line-2);}
+.fl-io-net{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);}
+.fl-io-net.def{color:#3E8E5A;}
+.fl-io-net.sur{color:#C2683A;}
+.fl-eout{margin:22px auto 0;max-width:330px;}
+.fl-eout-field{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 16px;box-shadow:var(--sh-sm);}
+.fl-eout-field span{font-weight:800;font-size:13px;color:var(--ink);display:flex;flex-direction:column;gap:2px;}
+.fl-eout-field span i{font-style:normal;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;}
+.fl-eout-field input{width:90px;text-align:right;border:none;background:transparent;font-family:inherit;font-weight:900;font-size:22px;color:var(--ink);letter-spacing:-.5px;}
+.fl-eout-field input:focus{outline:none;}
+.fl-eout-note{font-size:11px;color:var(--muted);font-weight:600;margin:8px 2px 0;text-align:center;}
+.fl-strava-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:#FC4C02;color:#fff;border:none;border-radius:var(--r-sm);padding:13px 16px;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:12px;box-shadow:var(--sh-sm);transition:transform .15s var(--ease),opacity .15s;}
+.fl-strava-btn:active{transform:scale(.98);}
+.fl-strava-on{text-align:center;font-weight:800;font-size:13px;color:#FC4C02;margin-bottom:12px;}
 
 /* ---------- capture / hero ---------- */
 .fl-hero{margin-top:4vh;text-align:center;animation:rise .6s var(--ease) both;}

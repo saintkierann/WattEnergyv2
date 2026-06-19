@@ -29,12 +29,22 @@ function extractJSON(text: string): any {
 function normalize(d: any) {
   const num = (v: any) => Math.max(0, Math.round(Number(v) || 0));
   const base = d?.base || {};
+  const p = num(base.p), c = num(base.c), f = num(base.f);
+  // Enforce the Atwater rule server-side: the calorie total must agree with its
+  // macros. This guarantees an internally-consistent, non-rounded number even if
+  // the model's stated kcal drifts — the source of the "always 550/600" feel.
+  const kcalFromMacros = 4 * p + 4 * c + 9 * f;
+  const statedKcal = num(base.kcal);
+  const kcal =
+    statedKcal > 0 && Math.abs(statedKcal - kcalFromMacros) / statedKcal <= 0.12
+      ? statedKcal
+      : kcalFromMacros;
   return {
     title: typeof d?.title === "string" ? d.title : "Meal",
     items: Array.isArray(d?.items)
       ? d.items.map((it: any) => ({ n: String(it?.n ?? ""), kcal: num(it?.kcal) }))
       : [],
-    base: { kcal: num(base.kcal), p: num(base.p), c: num(base.c), f: num(base.f) },
+    base: { kcal, p, c, f },
     confidence: ["low", "medium", "high"].includes(d?.confidence) ? d.confidence : "medium",
     note: typeof d?.note === "string" ? d.note : "",
     questions: Array.isArray(d?.questions)
@@ -80,9 +90,15 @@ export async function analyzeMealCore(input: AnalyzeInput): Promise<AnalyzeResul
   const client = new Anthropic({ apiKey });
 
   try {
-    const message = await client.messages.create({
+    // Adaptive thinking + high effort: the model reasons through per-item portion
+    // sizes and macro densities before answering, which is what drives accuracy.
+    // Thinking output counts toward max_tokens, so the budget is raised and the
+    // request is streamed (non-streaming can time out at this output size).
+    const stream = client.messages.stream({
       model: MODEL,
-      max_tokens: 1500,
+      max_tokens: 6000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: "high" },
       messages: [
         {
           role: "user",
@@ -96,6 +112,7 @@ export async function analyzeMealCore(input: AnalyzeInput): Promise<AnalyzeResul
         },
       ],
     });
+    const message = await stream.finalMessage();
 
     if (String(message.stop_reason) === "refusal") {
       return { status: 422, json: { error: "The reader declined this image. Try another photo of your meal, or enter macros manually." } };

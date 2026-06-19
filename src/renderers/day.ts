@@ -9,6 +9,13 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, style: string, p: Ren
     meals = p.meals || [],
     imgs = p.imgs || [];
   const M = macros(t, false);
+  // Energy in vs out summary line, drawn on each style only when an out value exists.
+  const inK = Math.round(p.caloriesIn ?? t.kcal);
+  const outK = Math.round(p.act?.kcal || 0);
+  const ioNet = inK - outK;
+  const ioNetTxt = (ioNet > 0 ? "+" : ioNet < 0 ? "−" : "") + Math.abs(ioNet).toLocaleString();
+  const ioLabel = ioNet > 0 ? "SURPLUS" : ioNet < 0 ? "DEFICIT" : "EVEN";
+  const ioStr = `IN ${inK.toLocaleString()}  ·  OUT ${outK.toLocaleString()}  ·  NET ${ioNetTxt} ${ioLabel}`;
   ctx.fillStyle = BONE;
   ctx.fillRect(0, 0, W, H);
   wordmark(ctx, 80, 80, INK);
@@ -52,6 +59,7 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, style: string, p: Ren
       T(ctx, m.g + "g", cxs[i], baseY + 340, 60, 900, m.color, "center", "top");
       T(ctx, m.label, cxs[i], baseY + 414, 24, 700, MUT, "center", "top", 1);
     });
+    if (outK > 0) T(ctx, ioStr, W / 2, baseY + 486, 24, 800, MUT, "center", "top", 1);
   } else if (style === "ledger") {
     T(ctx, "DAILY RECAP", 80, 200, 34, 800, MUT, "left", "top", 2);
     T(ctx, t.kcal.toLocaleString(), 80, 420, 220, 900, INK, "left", "alphabetic");
@@ -62,6 +70,7 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, style: string, p: Ren
       T(ctx, m.g + "g", cxs[i], 470, 44, 900, m.color, "left", "top");
       T(ctx, m.label, cxs[i], 524, 22, 700, MUT, "left", "top", 1);
     });
+    if (outK > 0) T(ctx, ioStr, 80, 566, 24, 800, MUT, "left", "top", 1);
     // meal ledger rows
     ctx.strokeStyle = LINE;
     ctx.lineWidth = 2;
@@ -89,6 +98,7 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, style: string, p: Ren
     const accent = "#FF3B30";
     T(ctx, "MEAL SPLITS", 80, 210, 34, 800, MUT, "left", "top", 2);
     T(ctx, t.p + "g P    ·    " + t.c + "g C    ·    " + t.f + "g F", 80, 262, 30, 700, MUT, "left", "top", 1);
+    if (outK > 0) T(ctx, ioStr, 80, 304, 24, 800, MUT, "left", "top", 1);
     const x = 80,
       rw = W - 160,
       rh = 144;
@@ -180,6 +190,7 @@ export function drawDayCard(ctx: CanvasRenderingContext2D, style: string, p: Ren
     let hh = d.getHours();
     const ap = hh >= 12 ? "PM" : "AM";
     hh = hh % 12 || 12;
+    if (outK > 0) T(ctx, `Out ${outK.toLocaleString()} · net ${ioNetTxt}`, 70, by2 + bh3 + 12, 24, 600, "#8E8E93", "left", "top", 0, SF);
     T(ctx, "Fueled " + hh + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap, W - 70, by2 + bh3 + 12, 24, 600, "#8E8E93", "right", "top", 0, SF);
   }
 

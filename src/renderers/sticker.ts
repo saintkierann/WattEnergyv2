@@ -220,6 +220,16 @@ export function drawSticker(ctx: CanvasRenderingContext2D, style: string, p: Ren
   const kcal = t.kcal.toLocaleString();
   const macroLine = `${t.p}P · ${t.c}C · ${t.f}F`;
 
+  // Energy in vs out (fuel in = food, fuel out = calories burned). Used by the
+  // ENERGY stickers below. `net = in − out`: positive = surplus, negative = deficit.
+  const inK = Math.round(p.caloriesIn || 0);
+  const outK = Math.round(p.act?.kcal || 0);
+  const net = inK - outK;
+  const netStr = (net > 0 ? "+" : net < 0 ? "−" : "") + Math.abs(net).toLocaleString();
+  const netLabel = net > 0 ? "surplus" : net < 0 ? "deficit" : "even";
+  const inStr = inK.toLocaleString();
+  const outStr = outK.toLocaleString();
+
   switch (style) {
     /* ---- BLUE bubbles ---- */
     case "blueMeal": {
@@ -459,6 +469,78 @@ export function drawSticker(ctx: CanvasRenderingContext2D, style: string, p: Ren
       bubble(ctx, [{ t: `${meal(p)} 🔥`, size: 46, weight: 500 }], { side: "sent", align: "edge", fill: BLUE, hi: BLUE_HI, midY: 440, showTail: false, maxW: 800 });
       const b = bubble(ctx, [{ t: `${kcal} cal · ${macroLine}`, size: 42, weight: 500 }], { side: "sent", align: "edge", fill: BLUE, hi: BLUE_HI, midY: 565, maxW: 860 });
       stamp(ctx, fueled(), b, "sent");
+      break;
+    }
+
+    /* ---- ENERGY: fuel in vs fuel out (the half other apps can't share) ---- */
+    case "ioBlue": {
+      const b = bubble(
+        ctx,
+        [
+          { t: `Fuel in ${inStr} · out ${outStr}`, size: 46, weight: 600 },
+          { t: `net ${netStr} ${netLabel} 🔥`, size: 38, weight: 400, color: "rgba(255,255,255,0.92)" },
+        ],
+        { fill: BLUE, hi: BLUE_HI, tAlign: "left", maxW: 880 }
+      );
+      stamp(ctx, fueled(), b, "sent");
+      break;
+    }
+    case "ioGreen": {
+      const b = bubble(
+        ctx,
+        [
+          { t: `Ate ${inStr} · burned ${outStr} 🔥`, size: 46, weight: 600 },
+          { t: `net ${netStr} ${netLabel}`, size: 38, weight: 400, color: "rgba(255,255,255,0.9)" },
+        ],
+        { fill: GREEN, hi: GREEN_HI, tAlign: "left", maxW: 880 }
+      );
+      stamp(ctx, fueled(), b, "sent");
+      break;
+    }
+    case "ioNet": {
+      const b = bubble(
+        ctx,
+        [
+          { t: netStr, size: 120, weight: 700 },
+          { t: `net energy · ${netLabel}`, size: 38, weight: 400, color: "rgba(255,255,255,0.9)" },
+          { t: `in ${inStr} · out ${outStr}`, size: 34, weight: 400, color: "rgba(255,255,255,0.82)" },
+        ],
+        { fill: BLUE, hi: BLUE_HI, gap: 8, padY: 38, tAlign: "center" }
+      );
+      stamp(ctx, clock(), b, "sent");
+      break;
+    }
+    case "ioThread": {
+      bubble(ctx, [{ t: "how's the balance?", size: 42, weight: 400, color: RX_INK }], { side: "received", align: "edge", fill: RX, midY: 400 });
+      const a = bubble(
+        ctx,
+        [
+          { t: `in ${inStr} / out ${outStr}`, size: 44, weight: 500 },
+          { t: `${netStr} ${netLabel} 🔥`, size: 38, weight: 400, color: "rgba(255,255,255,0.92)" },
+        ],
+        { side: "sent", align: "edge", fill: BLUE, hi: BLUE_HI, midY: 580, tAlign: "left", maxW: 820 }
+      );
+      stamp(ctx, fueled(), a, "sent");
+      break;
+    }
+    case "ioDouble": {
+      bubble(ctx, [{ t: `Fuelled ${inStr} cal 🍽️`, size: 46, weight: 500 }], { side: "sent", align: "edge", fill: BLUE, hi: BLUE_HI, midY: 430, showTail: false, maxW: 820 });
+      const b = bubble(ctx, [{ t: `Burned ${outStr} 🔥 · net ${netStr}`, size: 44, weight: 500 }], { side: "sent", align: "edge", fill: BLUE, hi: BLUE_HI, midY: 560, maxW: 900 });
+      stamp(ctx, fueled(), b, "sent");
+      break;
+    }
+    case "ioLock": {
+      const n = notif(
+        ctx,
+        "Watt ⚡",
+        [
+          { t: "Energy balance", size: 38, weight: 500, color: "rgba(20,20,22,0.95)" },
+          { t: `In ${inStr} · Out ${outStr} · ${netStr} ${netLabel}`, size: 34, weight: 400 },
+        ],
+        408,
+        { time: "now" }
+      );
+      stamp(ctx, fueled(), n, "center");
       break;
     }
 
